@@ -8,8 +8,7 @@ import org.opencv.core.CvType;
 
 
 public class FindEyes {
-	private int eRows, eCols;
-	
+
 	private Helpers hp = new Helpers();
 	
 	public FindEyes() { }
@@ -28,40 +27,6 @@ public class FindEyes {
 			
 		return resized;
 	}
-	
-/*	
-	void testPossibleCenterFormula(int x, int y, Mat weight, double gx, double gy, Mat out) {
-		int rows = weight.rows()-1, cols = weight.cols()-1;
-		double dx, dy, mag, dot;
-		double[] bufO;
-		for (int j = 0; j < rows; j++) {
-			for (int k = 0; k < cols; k++) {
-				//avoid a specific location
-				if (j == y && k == x) continue;
-				
-				bufO = out.get(j, k);
-				dx = x - k;
-				dy = y - j;
-				mag = Math.sqrt(dx*dx + dy*dy);
-				dx = dx/mag;
-				dy = dy/mag;
-				
-				dot = Math.max(0.0, dx*gx + dy*gy);
-
-				if (Vars.kEnableWeight)
-					bufO[0] += dot*dot *(weight.get(j, k)[0]/Vars.kWeightDivisor);
-				else
-					bufO[0] += dot*dot;
-				//System.out.printf("%f\t|%f\t|%b\t|%f\n", dx*gx + dy*gy, dot, dx*gx + dy*gy < 0,(double) bufO[0]);
-				//if (bufO[0] < 0)
-					//System.out.println("negs");
-				//else
-					//System.out.printf("%f\n", bufO[0]);
-				out.put(j, k, bufO);
-				//System.out.printf("%f\n", out.get(j, k)[0]);
-			}
-		}
-	}*/
 
 	void testPossibleCenterFormula(int x, int y, Mat weight, double gx, double gy, Mat out) {
 		int rows = weight.rows()-1, cols = weight.cols()-1;
@@ -106,7 +71,7 @@ public class FindEyes {
 	public Point findEyeCenter(Mat face, Rect eye) {
 		double gx, gy, gradientThresh;
 		Mat eyeROI = scaleToFastSize( face.submat(eye) );
-		//Core.rectangle(face, eye.tl(), eye.br(), Vars.FACE_RECT_COLOR); //draw eye region - for debugging
+		Core.rectangle(face, eye.tl(), eye.br(), Vars.FACE_RECT_COLOR); //draw eye region - for debugging
     	//find the gradient
 		Mat gradX = computeGradient(eyeROI);
 		Mat gradY = computeGradient(eyeROI.t()).t();
