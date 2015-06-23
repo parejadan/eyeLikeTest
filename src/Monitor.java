@@ -23,10 +23,10 @@ public class Monitor {
     private static int closedThresh;
 
     private static double std, mode;
-    private static long clCheckTime;
-    private static long mgCheckTime;
-    boolean clFlag;
-    boolean mgFlag;
+    private static long cloCheckTime;
+    private static long magCheckTime;
+    boolean cloFlag;
+    boolean magFlag;
     
     /**
      * @param mJDetector - cascade classifier for face detection
@@ -37,8 +37,8 @@ public class Monitor {
     public Monitor(CascadeClassifier mJDetector, int ct, long tl) {
     	mJavaDetector = mJDetector;
     	closedThresh = ct;
-    	clCheckTime = tl;
-    	mgCheckTime = 60000l;
+    	cloCheckTime = tl;
+    	magCheckTime = 60000l;
     }
 	
 	/** From a given image, it locates the largest face and identifies the right pupil position 
@@ -95,10 +95,11 @@ public class Monitor {
 	 * @param mgs - list of magnitudes recorded for pupil movement
 	 * @param placeVal - if dealing with hole numbers, set to 1, if dealing with values between
 	 * 	[1,0] set to to the desired decimal place. Ex. .234 for 10ths -> set placeVal to 10 for 23
+	 * @return - array where value at index 0 is std, and value at index 1 is mode
 	 */
-	void computeModeSTD(ArrayList<Double> mgs, double placeVal) {
+	double[] computeModeSTD(ArrayList<Double> mgs, double placeVal) {
 		int[] sortedLST;
-		
+		double[] sigMod = new double[2];
 		//locate min max to then perform a count sort
 		int max = (int) Math.ceil(mgs.get(0) * placeVal);
 		int min = max;
@@ -111,26 +112,69 @@ public class Monitor {
 		//locate mode, mxO is the maximum occurrence of a number from the original list
 		for (int mxO = 0, i = 0; i < max-min; i++)
 			if (sortedLST[i] > mxO)  {
-				mode = min+i;
+				sigMod[1] = min+i;
 				mxO = sortedLST[i];
 			}
 		//compute standard derivation
 		double var = 0;
-		for (double num : mgs) var += Math.pow(mode-num, 2.0); //variance on mode instead of mean
+		for (double num : mgs) var += Math.pow(sigMod[1]-num, 2.0); //variance on mode instead of mean
 		var /= mgs.size();
-		std = Math.sqrt(var);
+		sigMod[0] = Math.sqrt(var);
+		
+		return sigMod;
 	}
 
 	/** Checks if the eye movement falls bellow a standard deviation from  regular eye movement
 	 * @param mag - magnitude to check on
 	 * @return true if it falls bellow it, false otherwise
 	 */
-	///boolean checkMovement(double mag) { return (mag < mode-std) ? true : false; }
+	boolean checkMovement(double mag) { return (mag < mode-std) ? true : false; }
 
-	void watch(VideoCapture cam) {
-		Records tracking = new Records(mgCheckTime);
+	void train(VideoCapture cam) {
+		ArrayList<Point> tracking = new ArrayList<Point>();
 		Mat frame = new Mat();
-		double clCnt = 0;
+		Point tmp, tmp2;
+		
+		//record frames
+		long mgSTime = new Date().getTime(), cTime = new Date().getTime();
+		while (cTime-mgSTime >= magCheckTime) {
+			cam.read(frame);
+			tracking.add(getPupilxy(frame));
+			frame.release();
+		}
+		//get baseline mode and std from traning data
+		ArrayList<Double> mags = new ArrayList<Double>();
+		double[] sigMod;
+		double placeVal = 100.0;
+		int i, size = tracking.size();
+		tmp = tracking.get(size-1);
+		for (i = size-2; i >= 0; i--) {
+			tmp2 = tracking.get(i);
+			//treat closed eye signals as no eye movement
+			if (tmp.x == -1)
+				mags.add( length(new Point(0, 0), tmp2) );
+			else if (tmp2.x == -1)
+				mags.add( length(tmp, new Point(0, 0)) );
+			else
+				mags.add( length(tmp, tmp2) );	
+			tmp = tmp2; //rotate coordinate for next computation
+		}
+		
+		sigMod = computeModeSTD(mags, placeVal); //get std and mode from the monitoring time period
+		std = sigMod[0];
+		mode = sigMod[1];
+	}
+	
+	/**
+	 * Monitors drivers pupil movement to see if they are acceptably active or not.
+	 * cloFlag - true whenever a driver is considered to have eyes closed for an extended period
+	 * magFlag - true whenever a drivers eye movement falls bellow an acceptable baseline (obtained from training)
+	 * @param cam - pointer to video camera where frames can be extracted from
+	 */
+	void watch(VideoCapture cam) {
+		Records tracking = new Records(magCheckTime);
+		Mat frame = new Mat();
+		double clCnt, placeVal = 100.0;
 		int i, size, count;
 		Recs tmp, tmp2;
 		
@@ -142,12 +186,12 @@ public class Monitor {
 			size = tracking.size();
 			cTime = tracking.data.get( size-1 ).getT(); //use logged time of most recent frame added as current
 
-			if (cTime-clSTime >= clCheckTime) { //time to check for closed eyes
+			if (cTime-clSTime >= cloCheckTime) { //time to check for closed eyes
 
-				for (i = size-1, count = 0; i >= 0; i--) { //we look from the most recent frame to to the oldest
+				for (i = size-1, count = 0, clCnt = 0; i >= 0; i--) { //we look from the most recent frame to to the oldest
 					tmp = tracking.data.get(i);
 					
-					if (cTime-tmp.getT() <= clCheckTime) {//check if frame for closed eyes apply time interval to check
+					if (cTime-tmp.getT() <= cloCheckTime) {//check if frame for closed eyes apply time interval to check
 						if (tmp.getP().x == -1) //closed eyes frame detected
 							clCnt++;
 						count++;
@@ -156,15 +200,15 @@ public class Monitor {
 					}
 				}
 				if (clCnt / count >= .6)
-					clFlag = true; //eyes are closed, flag this bitch up
+					cloFlag = true; //eyes are closed, flag this bitch up
 				else
-					clFlag = false; //you got off easy this time
+					cloFlag = false; //you got off easy this time
 				clSTime = cTime;
 			}
 			
-			if (cTime-mgSTime >= mgCheckTime) { //time to check eye magnitudes
+			if (cTime-mgSTime >= magCheckTime) { //time to check eye magnitudes
 				ArrayList<Double> mags = new ArrayList<Double>();
-				
+				double[] sigMod;
 				//calculate magnitudes
 				tmp = tracking.data.get(size-1);
 				for (i = size-2; i >= 0; i--) {
@@ -179,7 +223,11 @@ public class Monitor {
 					tmp = tmp2; //rotate coordinate for next computation
 				}
 				
-				
+				sigMod = computeModeSTD(mags, placeVal); //get std and mode from the monitoring time period
+				if (checkMovement(sigMod[1]))
+					magFlag = true; //eye movement is falling bellow baseline
+				else
+					magFlag = false; //all checks-out; as you were
 			}
 		}
 	}
