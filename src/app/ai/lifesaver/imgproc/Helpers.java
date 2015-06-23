@@ -1,3 +1,5 @@
+package app.ai.lifesaver.imgproc;
+
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
@@ -18,8 +20,7 @@ public class Helpers {
 		return p.x >= 0 && p.x < cols && p.y >= 0 && p.y < rows;
 	}
 	
-	public Mat matrixMagnitude(Mat matX, Mat matY) {
-		int rows = matX.rows(), cols = matX.cols();
+	public Mat matrixMagnitude(Mat matX, Mat matY, int rows, int cols) {
 		Mat mags = Mat.zeros(rows, cols, CvType.CV_64F);
 		/*for (int y = 0; y < rows; y++) {
 			for (int x = 0; x < cols; x++) {
@@ -35,6 +36,25 @@ public class Helpers {
 		
 		return mags;
 	}
+
+	public Mat matrixMagnitude(Mat matX, Mat matY) {
+		int rows = matX.rows()-1, cols = matX.cols()-1;
+		Mat mags = Mat.zeros(rows, cols, CvType.CV_64F);
+		/*for (int y = 0; y < rows; y++) {
+			for (int x = 0; x < cols; x++) {
+				mags.put(y, x,
+						Math.sqrt(
+								Math.pow(matX.get(y, x)[0], 2.0) + Math.pow(matY.get(y, x)[0], 2.0)
+										));
+			}
+		}*/
+		//compute the magnitude of each pixel
+		Core.add(matX.mul(matX), matY.mul(matY), mags);
+		Core.sqrt(mags, mags);
+		
+		return mags;
+	}
+
 	
 	public double computeDynamicThreshold(Mat mat, double stdDevFactor) {
 		MatOfDouble std = new MatOfDouble(), mean = new MatOfDouble();
