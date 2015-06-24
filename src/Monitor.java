@@ -8,6 +8,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.highgui.Highgui;
 import org.opencv.highgui.VideoCapture;
 import org.opencv.objdetect.CascadeClassifier;
 
@@ -21,6 +22,7 @@ public class Monitor {
     private static float mRelativeFS = 0.2f;
     private static int mAbsoluteFS = 0;
     private static int closedThresh;
+    private static double placeVal;
 
     private static double std, mode;
     private static long cloCheckTime;
@@ -34,11 +36,12 @@ public class Monitor {
      * 	- value bellow 127 is too sensitive, above 140 is to dull
      * @param at - acceptable time eyes can remain closed or not present (milliseconds)
      */
-    public Monitor(CascadeClassifier mJDetector, int ct, long tl) {
+    public Monitor(CascadeClassifier mJDetector, int ct, double pVal, long tl, long trnT) {
     	mJavaDetector = mJDetector;
     	closedThresh = ct;
+    	placeVal = pVal;
     	cloCheckTime = tl;
-    	magCheckTime = 60000l;
+    	magCheckTime = trnT;
     }
 	
 	/** From a given image, it locates the largest face and identifies the right pupil position 
@@ -82,6 +85,9 @@ public class Monitor {
         	}
         }
 		
+		//Core.circle(mGray,  pupil,  5,  Vars.EYE_CIRCLE_COLR);
+    	//Highgui.imwrite("detection.png", mGray);
+
         for (Mat tmp : mv) tmp.release();
         mv.clear();
         faces.release(); mGray = faces = null;
@@ -101,25 +107,36 @@ public class Monitor {
 		int[] sortedLST;
 		double[] sigMod = new double[2];
 		//locate min max to then perform a count sort
-		int max = (int) Math.ceil(mgs.get(0) * placeVal);
+		int size = mgs.size(), i, mxO, num, max = (int) Math.ceil(mgs.get(0) * placeVal);
 		int min = max;
-		for (double num : mgs) {
-			if (num > max) max = (int) Math.ceil(num);
-			else if (num < min) min = (int) Math.ceil(num);
+		for (i =0; i < size; i++) {
+			num = (int) Math.ceil(mgs.get(i) * placeVal);
+			//System.out.printf("%d\t|%d\t|%d\t|%b\n", num, min, max, num > max);
+			if (num > max) max = num;
+			else if (num < min) min = num;
 		}
+		
 		sortedLST = new int[max-min];
-		for (double num : mgs) sortedLST[(int)num-min]++; //perform count sort to distinguish mode
+		//System.out.printf("min: %d\t|max: %d\t|lst-size: %d\n", min, max, sortedLST.length);
+		for (i = 0; i < size; i++) {
+			num = (int) Math.ceil( mgs.get(i) * placeVal);
+			//System.out.printf("min: %d\t|num: %d\t|dex: %d\n", min, num, num-min-1);		
+			if (num == min) sortedLST[0]++;
+			else sortedLST[num-min-1]++; //perform count sort to distinguish mode (num is treated as a index)
+		}
+		
 		//locate mode, mxO is the maximum occurrence of a number from the original list
-		for (int mxO = 0, i = 0; i < max-min; i++)
+		for (sigMod[1] = min, mxO = sortedLST[0], i = 1; i < max-min; i++) {
 			if (sortedLST[i] > mxO)  {
-				sigMod[1] = min+i;
+				sigMod[1] = min+i+1;
 				mxO = sortedLST[i];
 			}
+			//System.out.printf("dex: %d\t|num: %d\t|mxO: %d\t|occurs: %d\n", i, min+i+1, mxO, sortedLST[i]);
+		}
 		//compute standard derivation
-		double var = 0;
-		for (double num : mgs) var += Math.pow(sigMod[1]-num, 2.0); //variance on mode instead of mean
-		var /= mgs.size();
-		sigMod[0] = Math.sqrt(var);
+		for (i = 0; i < size; i++) sigMod[0] += Math.pow(sigMod[1]-mgs.get(i), 2.0); //compute variance using mode as the "key"
+		sigMod[1] /= size;
+		sigMod[0] = Math.sqrt(sigMod[0]);
 		
 		return sigMod;
 	}
@@ -137,15 +154,16 @@ public class Monitor {
 		
 		//record frames
 		long mgSTime = new Date().getTime(), cTime = new Date().getTime();
-		while (cTime-mgSTime >= magCheckTime) {
+		while (cTime-mgSTime <= magCheckTime) {
+			//System.out.println(cTime-mgSTime);
 			cam.read(frame);
-			tracking.add(getPupilxy(frame));
+			tracking.add(new Point(0, 0));//getPupilxy(frame));
 			frame.release();
+			 cTime = new Date().getTime();
 		}
 		//get baseline mode and std from traning data
 		ArrayList<Double> mags = new ArrayList<Double>();
 		double[] sigMod;
-		double placeVal = 100.0;
 		int i, size = tracking.size();
 		tmp = tracking.get(size-1);
 		for (i = size-2; i >= 0; i--) {
@@ -174,14 +192,14 @@ public class Monitor {
 	void watch(VideoCapture cam) {
 		Records tracking = new Records(magCheckTime);
 		Mat frame = new Mat();
-		double clCnt, placeVal = 100.0;
+		double clCnt;
 		int i, size, count;
 		Recs tmp, tmp2;
 		
 		long cTime, clSTime = new Date().getTime(), mgSTime = new Date().getTime();
 		while(true) {
 			cam.read(frame); //read another frame
-			tracking.add(getPupilxy(frame), new Date().getTime()); //processes frame for pupil coordinates; record time
+			tracking.add(getPupilxy(frame), new Date().getTime()); //processes frame for pupil coordinates; record time        	
 			frame.release();
 			size = tracking.size();
 			cTime = tracking.data.get( size-1 ).getT(); //use logged time of most recent frame added as current
@@ -229,6 +247,8 @@ public class Monitor {
 				else
 					magFlag = false; //all checks-out; as you were
 			}
+			
+			System.out.printf("%s\t|%s\n", (magFlag) ? "bellow baseline!":"", (cloFlag) ? "wake up!":"");
 		}
 	}
 }
