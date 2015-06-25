@@ -21,10 +21,10 @@ public class Monitor {
     private static CascadeClassifier mJavaDetector; //java classifier
     private static float mRelativeFS = 0.2f;
     private static int mAbsoluteFS = 0;
-    private static int closedThresh;
+    private static double closedThresh;
     private static double placeVal;
 
-    private static double std, mode;
+    private static double std, key;
     private static long cloCheckTime;
     private static long magCheckTime;
     boolean cloFlag;
@@ -32,11 +32,10 @@ public class Monitor {
     
     /**
      * @param mJDetector - cascade classifier for face detection
-     * @param ct - pixel threshold that determines when a pupil is closed or not;
-     * 	- value bellow 127 is too sensitive, above 140 is to dull
+     * @param ct - percent pupil 
      * @param at - acceptable time eyes can remain closed or not present (milliseconds)
      */
-    public Monitor(CascadeClassifier mJDetector, int ct, double pVal, long tl, long trnT) {
+    public Monitor(CascadeClassifier mJDetector, double ct, double pVal, long tl, long trnT) {
     	mJavaDetector = mJDetector;
     	closedThresh = ct;
     	placeVal = pVal;
@@ -74,19 +73,20 @@ public class Monitor {
             		mxFace = tmp;
             
         	pupil = fd.findPupil(mGray, mxFace, false); //locate right eye automatically
-    		Core.circle(mGray,  pupil,  5,  Vars.EYE_CIRCLE_COLR);
-    		
-        	if ( mGray.get((int) pupil.y, (int) pupil.x)[0] > closedThresh ) { //check if eyes are closed
+    		Core.circle(mGray, pupil, 5, Vars.EYE_CIRCLE_COLR);
+    		//System.out.printf("perc: %f\t|thresh: %f\n", FindEyes.cEye[1]/pupil.y, closedThresh);
+        	if ( FindEyes.cEye[1]/pupil.y >= closedThresh ) { //check if eyes are closed
         		pupil.x = -1; pupil.y = -1;
+        		//System.out.println("closed eyes");
         	} else {
             	//represent pupil coordinate as a ratio relative to eye region
-            	pupil.x /= FindEyes.eyeRegW;
-            	pupil.y /= FindEyes.eyeRegH;        		
+        		pupil.x -= FindEyes.cEye[0]; pupil.x /= FindEyes.eyeRegW; pupil.x *= placeVal;
+        		pupil.y -= FindEyes.cEye[1]; pupil.y /= FindEyes.eyeRegH; pupil.y *= placeVal;           	
         	}
         }
 		
 		//Core.circle(mGray,  pupil,  5,  Vars.EYE_CIRCLE_COLR);
-    	//Highgui.imwrite("detection.png", mGray);
+    	Highgui.imwrite("detection.png", mGray);
 
         for (Mat tmp : mv) tmp.release();
         mv.clear();
@@ -95,57 +95,62 @@ public class Monitor {
         return pupil;
 	}
 
-	double length(Point a, Point b) { return Math.sqrt((a.x - b.x)*(a.x - b.x) + (a.y + b.y)*(a.y + b.y)); }
+	int length(Point a, Point b) {
+		//double mag = Math.sqrt( Math.pow(a.x-b.x, 2.0) + Math.pow(a.y-b.y, 2.0) );
+		//System.out.printf("a.x: %f\t|b.x: %f\t|a.y: %f\t|b.y: %f\t|m: %f\n", a.x, b.x, a.y, b.y, mag);
+		return (int) Math.sqrt( Math.pow(a.x-b.x, 2.0) + Math.pow(a.y-b.y, 2.0) );
+	}
 	
-	/** Takes in a list of magnitudes and computes the STD from the mode instead of mean
+	/** Takes in a list of magnitudes and computes the STD from the key
 	 * @param mgs - list of magnitudes recorded for pupil movement
 	 * @param placeVal - if dealing with hole numbers, set to 1, if dealing with values between
 	 * 	[1,0] set to to the desired decimal place. Ex. .234 for 10ths -> set placeVal to 10 for 23
-	 * @return - array where value at index 0 is std, and value at index 1 is mode
+	 * @return - array where value at index 0 is std, and value at index 1 is key
 	 */
-	double[] computeModeSTD(ArrayList<Double> mgs, double placeVal) {
-		int[] sortedLST;
-		double[] sigMod = new double[2];
-		//locate min max to then perform a count sort
-		int size = mgs.size(), i, mxO, num, max = (int) Math.ceil(mgs.get(0) * placeVal);
-		int min = max;
-		for (i =0; i < size; i++) {
-			num = (int) Math.ceil(mgs.get(i) * placeVal);
-			//System.out.printf("%d\t|%d\t|%d\t|%b\n", num, min, max, num > max);
-			if (num > max) max = num;
-			else if (num < min) min = num;
+	double[] computeKeySTD(ArrayList<Integer> mgs) {
+		double[] sigKey = new double[2]; //sigKey[0] = standard derivation; sigKey[1] = Key
+		int size = mgs.size();
+		/*int[] sortedLST;
+		int size = mgs.size(), min = mgs.get(0), max = mgs.get(0);
+		for (int num : mgs) {
+			if (num > max)
+				max = num;
+			else if (num < min)
+				min = num;
+			System.out.printf("%d,", num);
 		}
-		
-		sortedLST = new int[max-min];
-		//System.out.printf("min: %d\t|max: %d\t|lst-size: %d\n", min, max, sortedLST.length);
-		for (i = 0; i < size; i++) {
-			num = (int) Math.ceil( mgs.get(i) * placeVal);
-			//System.out.printf("min: %d\t|num: %d\t|dex: %d\n", min, num, num-min-1);		
-			if (num == min) sortedLST[0]++;
-			else sortedLST[num-min-1]++; //perform count sort to distinguish mode (num is treated as a index)
+		sortedLST = new int[max-min+1];
+		for (int num : mgs) {//perform count sort to distinguish mode (num is treated as a index)
+			sortedLST[num-min]++;
+			System.out.printf("dex: %d\t|num: %d\t|occurance: %d\n", num-min, num, sortedLST[num-min]);
 		}
-		
-		//locate mode, mxO is the maximum occurrence of a number from the original list
-		for (sigMod[1] = min, mxO = sortedLST[0], i = 1; i < max-min; i++) {
-			if (sortedLST[i] > mxO)  {
-				sigMod[1] = min+i+1;
-				mxO = sortedLST[i];
+		//locate mode, mx is the maximum occurrence of a number from the original list
+		for (int mx = sortedLST[0], i = 1; i < max-min; i++) {
+			if (sortedLST[i] > mx) {
+				sigMod[1] = min+i; //set mode
+				mx = sortedLST[i];
 			}
-			//System.out.printf("dex: %d\t|num: %d\t|mxO: %d\t|occurs: %d\n", i, min+i+1, mxO, sortedLST[i]);
-		}
-		//compute standard derivation
-		for (i = 0; i < size; i++) sigMod[0] += Math.pow(sigMod[1]-mgs.get(i), 2.0); //compute variance using mode as the "key"
-		sigMod[1] /= size;
-		sigMod[0] = Math.sqrt(sigMod[0]);
+			System.out.printf("mode: %f\n", sigMod[1]);
+		}*/
 		
-		return sigMod;
+		for (int num : mgs) { sigKey[1] += num;System.out.printf("%d,", num);}
+		sigKey[1] /= size;
+
+		//compute sample standard derivation
+		for (int  num : mgs)
+			sigKey[0] += Math.pow(sigKey[1]-num, 2.0); //compute variance using a "key"
+
+		sigKey[0] /= size-1;
+		sigKey[0] = Math.sqrt(sigKey[0]);
+
+		return sigKey;
 	}
 
 	/** Checks if the eye movement falls bellow a standard deviation from  regular eye movement
 	 * @param mag - magnitude to check on
 	 * @return true if it falls bellow it, false otherwise
 	 */
-	boolean checkMovement(double mag) { return (mag < mode-std) ? true : false; }
+	boolean checkMovement(double mag) { return (mag < key-std) ? true : false; }
 
 	void train(VideoCapture cam) {
 		ArrayList<Point> tracking = new ArrayList<Point>();
@@ -157,12 +162,12 @@ public class Monitor {
 		while (cTime-mgSTime <= magCheckTime) {
 			//System.out.println(cTime-mgSTime);
 			cam.read(frame);
-			tracking.add(new Point(0, 0));//getPupilxy(frame));
+			tracking.add(getPupilxy(frame));
 			frame.release();
-			 cTime = new Date().getTime();
+			cTime = new Date().getTime();
 		}
-		//get baseline mode and std from traning data
-		ArrayList<Double> mags = new ArrayList<Double>();
+		//get baseline Key and std from training data
+		ArrayList<Integer> mags = new ArrayList<Integer>();
 		double[] sigMod;
 		int i, size = tracking.size();
 		tmp = tracking.get(size-1);
@@ -178,9 +183,11 @@ public class Monitor {
 			tmp = tmp2; //rotate coordinate for next computation
 		}
 		
-		sigMod = computeModeSTD(mags, placeVal); //get std and mode from the monitoring time period
+		sigMod = computeKeySTD(mags);
 		std = sigMod[0];
-		mode = sigMod[1];
+		key = sigMod[1];
+		System.out.printf("standard: %f\t|key: %f\n", std, key);
+
 	}
 	
 	/**
@@ -204,14 +211,17 @@ public class Monitor {
 			size = tracking.size();
 			cTime = tracking.data.get( size-1 ).getT(); //use logged time of most recent frame added as current
 
-			if (cTime-clSTime >= cloCheckTime) { //time to check for closed eyes
-
+			//CLOSED EYES DETECTION UNDER CONSTRUCTION
+			/*if (cTime-clSTime >= cloCheckTime) { //time to check for closed eyes
+				System.out.println("checking closed eyes");
 				for (i = size-1, count = 0, clCnt = 0; i >= 0; i--) { //we look from the most recent frame to to the oldest
 					tmp = tracking.data.get(i);
-					
+					System.out.printf("%f\n",tmp.getP().x);
 					if (cTime-tmp.getT() <= cloCheckTime) {//check if frame for closed eyes apply time interval to check
-						if (tmp.getP().x == -1) //closed eyes frame detected
+						if (tmp.getP().x == -1) {//closed eyes frame detected
+							System.out.println("closed eye!");
 							clCnt++;
+						}
 						count++;
 					} else {
 						break; //frames have either already been checked or too old to mater
@@ -222,15 +232,16 @@ public class Monitor {
 				else
 					cloFlag = false; //you got off easy this time
 				clSTime = cTime;
-			}
+			}*/
 			
 			if (cTime-mgSTime >= magCheckTime) { //time to check eye magnitudes
-				ArrayList<Double> mags = new ArrayList<Double>();
-				double[] sigMod;
+				ArrayList<Integer> mags = new ArrayList<Integer>();
+				double[] sigKey;
 				//calculate magnitudes
 				tmp = tracking.data.get(size-1);
 				for (i = size-2; i >= 0; i--) {
 					tmp2 = tracking.data.get(i);
+					//System.out.printf("a.x: %f\t|a.y: %f\t|b.x: %f\t|a.y: %f\n", tmp.getP().x, tmp.getP().y, tmp2.getP().x,tmp.getP().y);
 					//treat closed eye signals as no eye movement
 					if (tmp.getP().x == -1)
 						mags.add( length(new Point(0, 0), tmp2.getP()) );
@@ -240,15 +251,17 @@ public class Monitor {
 						mags.add( length(tmp.getP(), tmp2.getP()) );	
 					tmp = tmp2; //rotate coordinate for next computation
 				}
-				
-				sigMod = computeModeSTD(mags, placeVal); //get std and mode from the monitoring time period
-				if (checkMovement(sigMod[1]))
+
+				sigKey = computeKeySTD(mags); //get std and key from the monitoring time period
+				if (checkMovement(sigKey[1]))
 					magFlag = true; //eye movement is falling bellow baseline
 				else
 					magFlag = false; //all checks-out; as you were
+				System.out.printf("|checked key: %f\t|%s\n", sigKey[1], (magFlag) ? "bellow baseline!":"");
+
 			}
 			
-			System.out.printf("%s\t|%s\n", (magFlag) ? "bellow baseline!":"", (cloFlag) ? "wake up!":"");
+			//System.out.printf("%s\t|%s\n", (magFlag) ? "bellow baseline!":"", (cloFlag) ? "wake up!":"");
 		}
 	}
 }
