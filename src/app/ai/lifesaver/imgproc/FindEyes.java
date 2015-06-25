@@ -11,20 +11,20 @@ import org.opencv.core.Rect;
 import org.opencv.core.Mat;
 //import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.highgui.Highgui;
 //import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.core.CvType;
 
 public class FindEyes {
-	public static int eyeRegW, eyeRegH, eyeDexY, eyeDexX;
+	public static int eyeRegW, eyeRegH;
+	public static double[] cEye;
 	private static int rows, cols;
-	//Mat faceTMP, faceOLD;
-	//double[] CCCC;
 	
 	private Helpers hp = new Helpers();
 	
-	public FindEyes() { }
+	public FindEyes() {
+		cEye = new double[2];
+	}
 		
 	public Point unscalePoint(Point p, Rect origSize) {
 		float ratio = ( (float) Vars.kFastEyeWidth/origSize.width );
@@ -123,25 +123,12 @@ public class FindEyes {
 			}
 		//find the maximum point
 		Core.MinMaxLocResult mmr = Core.minMaxLoc(outSum);
-		Point e = unscalePoint(mmr.maxLoc, eye);
+		return unscalePoint(mmr.maxLoc, eye);
+		//Point e = unscalePoint(mmr.maxLoc, eye);
 		
-		/*double obj1 = computeObjective(e, gradX, gradY), obj2 =  computeObjective(new Point(0, 0), gradX, gradY);
-		if (obj2 >= obj1)
-			System.out.println("it's bigger - that's what she said");
-		*/
-		Mat objImg = Mat.zeros(rows, cols, CvType.CV_64F);
-		double[] bufO = new double[1];
-		for(int y = 0; y < rows; y++)
-			for (int  x = 0; x < cols; x++) {
-				bufO[0] = computeObjective(new Point(x, y), gradX, gradY) * 2550;
-				System.out.println(bufO[0]);
-				objImg.put(y, x, bufO);
-			}
-    	Highgui.imwrite("objImg.png", objImg);
-		
-		outSum.release(); weight.release(); gradX.release(); gradY.release(); mags.release();
-		outSum = weight = gradX = gradY = mags = null;
-		return e;
+		//outSum.release(); weight.release(); gradX.release(); gradY.release(); mags.release();
+		//outSum = weight = gradX = gradY = mags = null;
+		//return e;
 	}
 		
 	public Point findPupil(Mat frame_gray, Rect face, boolean leftEye) {
@@ -154,28 +141,29 @@ public class FindEyes {
 		//determine a face to eye ratio and positioning based on percentages
 		eyeRegW = (int) (face.width * (Vars.kEyePercentWidth/100.0));
 		eyeRegH = (int) (face.height * (Vars.kEyePercentHeight/100.0));
-		eyeDexY = (int) (face.height * (Vars.kEyePercentTop/100.0));
-		eyeDexX = (int) (face.width * (Vars.kEyePercentSide/100.0));
+		int eyeDexY = (int) (face.height * (Vars.kEyePercentTop/100.0));
+		int eyeDexX = (int) (face.width * (Vars.kEyePercentSide/100.0));
 		Rect lEyeReg = new Rect(eyeDexX, eyeDexY, eyeRegW, eyeRegH);
 		double[] cFace = {face.width/2.0 + face.x, face.height/2.0 + face.y};
-		//System.out.printf("%d\t%d\n", eyeRegW, eyeRegH);
 
 		if (leftEye) { //detect pupils for left eye region (the camera's left, not the model's)
 			// 4 and 1 accommodate minor int arithmetic value lost in calculations
-			double[] cEyeL = {cFace[0] - lEyeReg.width - 4, cFace[1] - lEyeReg.y - 1};
-			//CCCC = cEyeL;
+			cEye[0] = cFace[0] - lEyeReg.width - 4; cEye[1] = cFace[1] - lEyeReg.y - 1;
 			pupil = findEyeCenter(faceROI,lEyeReg);
-			//System.out.printf("%f\n", faceROI.get((int)pupil.x,(int) pupil.y)[0]);
-			pupil.x += cEyeL[0];
-			pupil.y += cEyeL[1];
+			pupil.x += cEye[0];
+			pupil.y += cEye[1];
 
 		} else {
 			Rect rEyeReg = new Rect(face.width - eyeRegW - eyeDexX, eyeDexY, eyeRegW,eyeRegH);
-			double[] cEyeR = {cFace[0] + 4, cFace[1] - rEyeReg.y - 1};
+			cEye[0] = cFace[0] + 4; cEye[1] = cFace[1] - rEyeReg.y - 1;
 			pupil = findEyeCenter(faceROI,rEyeReg);
-			pupil.x += cEyeR[0];
-			pupil.y += cEyeR[1];
+			pupil.x += cEye[0];
+			pupil.y += cEye[1];
 		}
+		//Core.circle(frame_gray, new Point(cEye[0], cEye[1]), 2, Vars.EYE_CIRCLE_COLR);
+		//Core.circle(frame_gray, new Point(eyeDexX+face.x, eyeDexY+face.y), 2, Vars.EYE_CIRCLE_COLR);
+		//Core.circle(frame_gray, new Point(face.x, face.y), 2, Vars.EYE_CIRCLE_COLR);
+		//System.out.println(1.0*(cEye[1]-face.y)/face.height);
 
 		faceROI.release(); faceROI = null;
 		return pupil;
@@ -248,7 +236,7 @@ public class FindEyes {
 		Point computeInfo = new Point(start_step, 0);
 		// find a single point's derivative gradient
 		Point g_pt;
-		Point tmp = new Point();
+		//Point tmp = new Point();
 		// initialize placeholder best
 		//System.out.printf("center localisation\n");
 		best = new Point();
@@ -409,7 +397,7 @@ public class FindEyes {
 		double left = computeObjective(cent, gradX, gradY);
 
 		// while armijo's rule is not fulfilled, reduce step size
-		int cnt = 0;
+		//int cnt = 0;
 		//System.out.printf("l: %f\t|r: %f\t|t: %f\t|s: %f\n",left, right, threshold, size);
 		while (left < right && threshold < size) {
 			// undo the previous step
@@ -421,7 +409,7 @@ public class FindEyes {
 			cent.x += size * grad.x;
 			cent.y += size * grad.y;
 			left = computeObjective(cent, gradX, gradY);
-			cnt++;
+			//cnt++;
 		}
 		//System.out.printf("while-loop iterations within stepsize: %d\n",cnt);
 		//System.out.printf("l: %f\t|r: %f\t|t: %f\t|s: %f\t|j: ",left, right, threshold, size);
