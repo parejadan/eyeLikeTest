@@ -7,12 +7,12 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
-import org.opencv.highgui.Highgui;
+//import org.opencv.highgui.Highgui;
 import org.opencv.highgui.VideoCapture;
 import org.opencv.objdetect.CascadeClassifier;
 
 import app.ai.lifesaver.imgproc.FindEyes;
-import app.ai.lifesaver.imgproc.Vars;
+//import app.ai.lifesaver.imgproc.Vars;
 import app.ai.lifesaver.stats.Stats;
 
 public class Monitor {
@@ -28,8 +28,7 @@ public class Monitor {
     private static double std, key;
     private static int trnlen, checklen;
     private static int picksize, subsize; 
-    boolean cloFlag;
-    boolean magFlag;
+    private FeedBack feed = new FeedBack();
     
     /**
      * @param mJDetector - cascade classifier for face detection
@@ -73,10 +72,8 @@ public class Monitor {
             for (Rect tmp : facesArray)
             	if (tmp.height+tmp.width > mxFace.height+mxFace.width)
             		mxFace = tmp;
-            
         	pupil = fd.findPupil(mGray, mxFace, false); //locate right eye automatically
-    		Core.circle(mGray, pupil, 5, Vars.EYE_CIRCLE_COLR);
-    		//System.out.printf("perc: %f\t|thresh: %f\n", FindEyes.cEye[1]/pupil.y, closedThresh);
+    		//Core.circle(mGray, pupil, 2, Vars.EYE_CIRCLE_COLR);
         	if ( FindEyes.cEye[1]/pupil.y >= closedThresh ) { //check if eyes are closed
         		pupil.x = -1; pupil.y = -1;
         		//System.out.println("closed eyes");
@@ -87,7 +84,7 @@ public class Monitor {
         	}
         }
 		
-    	Highgui.imwrite("detection.png", mGray);
+    	//Highgui.imwrite("detection.png", mGray);
 
         for (Mat tmp : mv) tmp.release();
         mv.clear();
@@ -141,12 +138,6 @@ public class Monitor {
 		
 	}
 	
-	/**
-	 * Monitors drivers pupil movement to see if they are acceptably active or not.
-	 * cloFlag - true whenever a driver is considered to have eyes closed for an extended period
-	 * magFlag - true whenever a drivers eye movement falls bellow an acceptable baseline (obtained from training)
-	 * @param cam - pointer to video camera where frames can be extracted from
-	 */
 	void watch(VideoCapture cam) {
 		Records tracking = new Records(checklen);
 		ArrayList<Double> mags, moments;
@@ -176,11 +167,18 @@ public class Monitor {
 				moments = st.genRandMoments(mags, picksize, subsize);
 				mean = st.getMean( moments );
 				//sig = st.getSTD(mags, mean);
-				magFlag = checkMovement(mean);
 				
-				System.out.printf("train-m: %f\t|check-m: %f\t\n", key, mean);
-				System.out.printf("train-s: %f\t\n", std);
-				System.out.printf( "%s\n\n", (magFlag) ? "distracted" : "paying attention");
+				if ( checkMovement(mean) ) { //true if eye movement deviated from baseline;
+					if ( feed.state == 0 ) //if not already red show red
+						feed.showRed();
+				} else { //false if eye movement did not deviate
+					if ( feed.state == 1 || feed.state == -1 ) //if window is red, change to green
+						feed.showGreen();
+				}
+				
+				//System.out.printf("train-m: %f\t|check-m: %f\t\n", key, mean);
+				//System.out.printf("train-s: %f\t\n", std);
+				//System.out.printf( "%s\n\n", (magFlag) ? "distracted" : "paying attention");
 			}
 
 		}
