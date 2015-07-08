@@ -24,12 +24,12 @@ class DetectFaceDemo {
     	VideoCapture cam = new VideoCapture(0);
     	mJavaDetector = new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()); //works with gray scale images
     	
-    	Monitor mon = new Monitor(mJavaDetector, .98, 100.0, 100); //250 magnitudes for training (500 frames)
+    	Monitor mon = new Monitor(mJavaDetector, .98, 100.0, 50, 1, 100); //250 magnitudes for training (500 frames)
     	System.out.println("traning beginning");
     	mon.train(cam);
     	System.out.println("traning complete");
-    	System.out.println("beginning monitoring");
-    	mon.watch(cam);
+    	//System.out.println("beginning monitoring");
+    	//mon.watch(cam);
     	/***
     	//Mat frame = Highgui.imread( getClass().getResource("ascent-p26.bmp").getPath() );
     	//Rect tmp = new Rect(0, 0, frame.width(), frame.height() );

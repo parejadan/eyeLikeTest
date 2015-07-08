@@ -82,7 +82,7 @@ public class FindEyes {
 	public Point findEyeCenter(Mat face, Rect eye) {
 		double gx, gy, gradientThresh;
 		Mat eyeROI = scaleToFastSize( face.submat(eye) );
-    	Highgui.imwrite("eyeROI.png", eyeROI);
+    	//Highgui.imwrite("eyeROI.png", eyeROI);
 		//Highgui.imwrite("transpose.png", eyeROI.t());
 		rows = eyeROI.rows()-1; cols = eyeROI.cols()-1;
 		

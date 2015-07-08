@@ -49,8 +49,14 @@ public class Stats {
 	 */
 	public ArrayList<Double> dataSample(ArrayList<Double> data, int len) {
 		ArrayList<Double> subSample = new ArrayList<Double>(len);
-		
-		for(int i = 0; i < len; i++) subSample.add( data.get( (int)(Math.random()*data.size()) ) );
+		//String out = "";
+		//System.out.println("dex---");
+		for(int i = 0; i < len; i++) {
+			int dex = (int)( Math.random()*data.size() );
+			subSample.add( data.get( dex ) );
+			//out += String.format("%d,\t", dex);
+		}
+		//System.out.println(out);
 		
 		return subSample;
 	}
@@ -87,5 +93,27 @@ public class Stats {
 		for (double num : data) frequencies[(int) (num*scalar)]++;
 		
 		return frequencies;
+	}
+	
+	public double getMode(ArrayList<Double> data, int scalar) {
+		int min = 100000, max = 0, i = 0;
+		double dex = 0;
+		//locate min max
+		for (double num : data) { //maximum value of raw data
+			if ( (int) num*scalar > max) max = (int) (num*scalar);
+			if ( (int) num*scalar < min) min = (int) (num*scalar);
+		}
+		//calculate frequencies from data values
+		int[] frequencies = new int[max];
+		for (double num : data) frequencies[(int) (num*scalar)]++;
+		//locate data value with highest frequency
+		max = 0;
+		for (i = 0; i < frequencies.length; i++)//max = highest frequency
+			if (frequencies[i] > max) {
+				max = frequencies[i];
+				dex = i;
+			}
+		//set data value to original scale
+		return (dex+min) / scalar;
 	}
 }
