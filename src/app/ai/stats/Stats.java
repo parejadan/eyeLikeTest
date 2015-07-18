@@ -1,8 +1,10 @@
-package app.ai.lifesaver.stats;
+package app.ai.stats;
 
 import java.util.ArrayList;
 
 public class Stats {
+	
+    //private static final String faceTAG = "Stats::Stats";
 	
 	public Stats(){ };
 	
@@ -49,14 +51,10 @@ public class Stats {
 	 */
 	public ArrayList<Double> dataSample(ArrayList<Double> data, int len) {
 		ArrayList<Double> subSample = new ArrayList<Double>(len);
-		//String out = "";
-		//System.out.println("dex---");
 		for(int i = 0; i < len; i++) {
 			int dex = (int)( Math.random()*data.size() );
 			subSample.add( data.get( dex ) );
-			//out += String.format("%d,\t", dex);
 		}
-		//System.out.println(out);
 		
 		return subSample;
 	}
@@ -116,4 +114,7 @@ public class Stats {
 		//set data value to original scale
 		return (dex+min) / scalar;
 	}
+	
+	public double length(double x1, double y1, double x2, double y2) { return (int) Math.sqrt( Math.pow(x1-x2, 2.0) + Math.pow(y1-y2, 2.0) ); }
+	
 }

@@ -1,4 +1,4 @@
-package app.ai.lifesaver.imgproc;
+package app.ai.imgproc;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -8,6 +8,8 @@ import org.opencv.core.CvType;
 import org.opencv.core.MatOfDouble;
 
 public class Helpers {
+
+	//private static final String helpTAG = "imgproc::Helpers";
 	
 	public Helpers() {};
 	
