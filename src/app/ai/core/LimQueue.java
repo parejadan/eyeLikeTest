@@ -14,7 +14,7 @@ public class LimQueue<T> {
 	public void changeLim(int lim) { limit = lim; }
 		
 	public void add(T mag) { //pops up any old point to make room before adding new point
-		if (data.size()+1 > limit)
+		if (data.size() >= limit)
 			data.remove(0);
 		data.add(mag);
 	}
@@ -23,6 +23,6 @@ public class LimQueue<T> {
 	public T getVal(int i) { return data.get(i); }
 	public int size() { return data.size(); }
 	
-	public boolean hasRoom() { return (data.size()+1 < limit) ? true : false; }
+	public boolean hasRoom() { return (data.size() >= CoreVars.queueSize) ? false : true; }
 
 }
