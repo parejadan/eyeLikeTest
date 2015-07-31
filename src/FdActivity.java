@@ -19,7 +19,7 @@ import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.objdetect.CascadeClassifier;
-//import org.opencv.highgui.Highgui;
+import org.opencv.highgui.Highgui;
 import org.opencv.highgui.VideoCapture;
 
 import app.ai.imgproc.FindEyes;
@@ -34,28 +34,31 @@ import java.util.Scanner;
 public class FdActivity {
 
 	public static void main(String[] args) throws Exception {
-    	System.loadLibrary(Core.NATIVE_LIBRARY_NAME);    	
+    	System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
         Detect obj = new Detect();
-        
-        //obj.train();
+
+        obj.train();
         //obj.test();
         //obj.captureFromVidFile(15.33, 30, 60, 44, "s102/vid.wmv", "s102/labels.txt", "s102/training-data.arff");
         //obj.captureFromVidFile(15.33, 30, 60, 54, "s103/vid.wmv", "s103/labels.txt", "s103/training-data.arff");
-        //obj.captureFromVidFile(15.33, 30, 71, 80, "s108/vid.wmv", "s108/labels.txt", "s108/training-data.arff");        
-        //obj.captureFromVidFile(15.33, 30, 61, 47, "s104/vid.wmv", "s104/labels.txt", "s104/training-data.arff");        
+        //obj.captureFromVidFile(15.33, 30, 71, 80, "s108/vid.wmv", "s108/labels.txt", "s108/training-data.arff");
+        //obj.captureFromVidFile(15.33, 30, 61, 47, "s104/vid.wmv", "s104/labels.txt", "s104/training-data.arff");
+        //obj.captureFromVidFile(15.33, 30, 24, 42, "s106/vid.wmv", "s106/labels.txt", "s106/training-data.arff");
+        //obj.captureFromVidFile(15.33, 30, 60, 64, "s101/vid.wmv", "s101/labels.txt", "s101/training-data.arff");
+        //obj.captureFromVidFile(15.33, 30, 60, 64, "s107/vid.wmv", "s107/labels.txt", "s107/training-data.arff");
 
     }
-    
+
 }
 
 class Detect {
-	static String trainFile = "test-training.data";
+	static String trainFile = "dummy-data.arff";
     //APIs
     private static FindFace _faceD; //face detection object
     private static FindEyes _eyeD = new FindEyes(); //pupil detection object
     private static Stats _stool = new Stats(); //mathematics and stats object
     public static LimQueue<Double> mags;
-    private static VideoCapture cam;// = new VideoCapture("vid29.wmv");
+    private static VideoCapture cam = new VideoCapture(0);
     FastVector fvWekaAttributes;
     static String[] labels = {"not-distracted", "distracted"}; // or non-distracted
     Scanner input = new Scanner(System.in);
@@ -64,8 +67,24 @@ class Detect {
     ProcStruct ps;
 	Mat frame  = new Mat();
 	int frms = 0;
-		
-	Detect() { }
+
+	Detect() {
+        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
+        
+    	Attribute[] attributes;
+    	attributes = new Attribute[CoreVars.queueSize+1];
+        fvWekaAttributes = new FastVector(4); // Declare the feature vector
+        
+    	for (int i = 0; i < CoreVars.queueSize; i++) {
+    		attributes[i] = new Attribute(String.format("magnitude%d", i) ); // create numeric attributes
+    		fvWekaAttributes.addElement(attributes[i]);
+    	}
+        FastVector fvClassVal = new FastVector(2); // Declare the class attribute along with its values
+        fvClassVal.addElement(labels[0]);
+        fvClassVal.addElement(labels[1]);
+        attributes[CoreVars.queueSize] = new Attribute("theClass", fvClassVal);
+        fvWekaAttributes.addElement(attributes[CoreVars.queueSize]);
+	}
 
 	public double getFPS(String vidFile, double vidLen) {
 		cam = new VideoCapture(vidFile);
@@ -93,7 +112,7 @@ class Detect {
             ps.setpupil(_eyeD.getPupil(ps.getImg(), ps.getRect(), true));
         }
     	cur = ps.getpupil();
-    	//Highgui.imwrite( "detection.png", ps.getImg() );
+    	Highgui.imwrite( "detection.png", ps.getImg() );
     	
         //treat closed eye signals as no eye movement
         if (cur.x  ==  -1 && cur.y == -1) {
@@ -132,7 +151,7 @@ class Detect {
         
     	return !mags.hasRoom(); //true when queue is full, false otherwise
     }
-      
+
     /**
      * @param vidFPS -  video file frames per second
      * @param stampT - time stamp relative to video that a classification occurs (in seconds)
@@ -148,27 +167,12 @@ class Detect {
     	System.out.printf("Fast forwarding %ds into the video\n", startT);
     	for(int i = 0; i < (int) (startT*vidFPS); i++) cam.read(frame); //fast forward to where video should begin recording
     	
-        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
     	System.out.println("DATA COLLECTION BEGINNING");
     	CoreVars.queueSize = (int) (stampT*vidFPS);
     	CoreVars.rows = vidLenMins*60/stampT;
     	
     	System.out.printf("Queue Size is: %d\n", CoreVars.queueSize);
         
-        //Weka  objects
-    	Attribute[] attributes;
-    	attributes = new Attribute[CoreVars.queueSize+1];
-        fvWekaAttributes = new FastVector(4); // Declare the feature vector
-        
-    	for (int i = 0; i < CoreVars.queueSize; i++) {
-    		attributes[i] = new Attribute(String.format("magnitude%d", i) ); // create numeric attributes
-    		fvWekaAttributes.addElement(attributes[i]);
-    	}
-        FastVector fvClassVal = new FastVector(2); // Declare the class attribute along with its values
-        fvClassVal.addElement(labels[0]); fvClassVal.addElement(labels[1]);
-        attributes[CoreVars.queueSize] = new Attribute("theClass", fvClassVal);
-        fvWekaAttributes.addElement(attributes[CoreVars.queueSize]);
-
         Instances isTrainingSet = new Instances("Rel", fvWekaAttributes, CoreVars.rows); // Create an empty training set
         // Set class index
         isTrainingSet.setClassIndex(CoreVars.queueSize);
@@ -189,39 +193,23 @@ class Detect {
         saveArff(isTrainingSet, trainFile);
     	
     }
-    
+
     void train() throws IOException  {
     	System.out.println("TRAINNING IS BEGINNING");
-    	int i;
-        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
-
-        //WEKA OBJECTS
-    	Attribute[] attributes;
-    	attributes = new Attribute[CoreVars.queueSize+1];
-        fvWekaAttributes = new FastVector(4); // Declare the feature vector
-        
-    	for (i = 0; i < CoreVars.queueSize; i++) {
-    		attributes[i] = new Attribute(String.format("magnitude%d", i) ); // create numeric attributes
-    		fvWekaAttributes.addElement(attributes[i]);
-    	}
-        FastVector fvClassVal = new FastVector(2); // Declare the class attribute along with its values
-        fvClassVal.addElement(labels[0]);
-        fvClassVal.addElement(labels[1]);
-        attributes[CoreVars.queueSize] = new Attribute("theClass", fvClassVal);
-        fvWekaAttributes.addElement(attributes[CoreVars.queueSize]);
+    	int i, j;
         // queueSize := training length; allocate equal room for attentive and inattentive
         Instances isTrainingSet = new Instances("Rel", fvWekaAttributes, CoreVars.rows*2); // Create an empty training set
         // Set class index
         isTrainingSet.setClassIndex(CoreVars.queueSize);
 
-        Instance newReading;        
+        Instance newReading;
         for (i = 0; i < labels.length; i++) {
             System.out.printf("Now Collecting %s dataset. Press enter to begin: ", labels[i]);
             input.nextLine();
-            
+
             fillUpQueue();
             
-            for (int j = 0; j < CoreVars.rows; j++) {
+            for (j = 0; j < CoreVars.rows; j++) {
                 newReading = new Instance(CoreVars.queueSize+1);
                 for (int k = 0; k < CoreVars.queueSize; k++) newReading.setValue((Attribute)fvWekaAttributes.elementAt(k), mags.getVal(k));
                 
@@ -230,18 +218,17 @@ class Detect {
                 readNextFrame();
             }
         }
-        
+
         saveArff(isTrainingSet, trainFile);
     }
     
     void test() throws Exception {
-    	
     	System.out.println("TESTING IS BEGINNING");
     	Instances isTrainingSet = loadArff(trainFile);
     	isTrainingSet.setClassIndex(isTrainingSet.numAttributes() - 1);
-    	
+
     	// After training data set is complete, build model
-        Classifier cModel = (Classifier)new RandomForest();   
+        Classifier cModel = (Classifier)new RandomForest();
         cModel.buildClassifier(isTrainingSet);
         Evaluation eTest = new Evaluation(isTrainingSet);
                 
@@ -253,37 +240,38 @@ class Detect {
         Instance newFrame = new Instance(CoreVars.queueSize+1);
         
         // Assign whatever as the class - this isn't looked at while being evaluated
-        newFrame.setValue((Attribute)fvWekaAttributes.elementAt(CoreVars.queueSize), "distracted");
+        newFrame.setValue((Attribute)fvWekaAttributes.elementAt(CoreVars.queueSize), labels[0]);
         dataUnlabeled.add(newFrame);
         dataUnlabeled.setClassIndex(dataUnlabeled.numAttributes() - 1);
-        
+
         System.out.print("Press enter to begin: ");
         input.nextLine();
-        
-        fillUpQueue();
+
+        //fillUpQueue();
         sTime = new  Date().getTime();
+        //while(true) {
         for(int i = 0; i < CoreVars.rows; i++) {
-        	
+            fillUpQueue();
         	for (int k = 0; k < CoreVars.queueSize; k++) newFrame.setValue((Attribute)fvWekaAttributes.elementAt(k), mags.getVal(k));
-        	
+
             // Predict
             isDistracted = eTest.evaluateModelOnceAndRecordPrediction(cModel, dataUnlabeled.lastInstance());
             cTime = new Date().getTime();
-            
+
             // Also throw in a check for whether driver has been alerted in last ~5s
             if (isDistracted == 1 && wasDistracted  && (cTime - sTime) / 1000l >= secondsWait) {
             	System.out.print( (cTime - sTime) );
             	System.out.println("\t" + labels[1]); // Turn this into an alert on the phone
             	sTime = cTime; // update most recent alert
-            }            
+            }
             // Set up for next frame
             if (isDistracted == 1) wasDistracted = true;
             else wasDistracted = false;
-            
+
             readNextFrame();
-        }  
+        }
     }
-    
+
     /* Saves the Instances object as an .arff file.
      * Pre-conditions:
      *  location specifies an absolute path.
@@ -308,7 +296,5 @@ class Detect {
     	ArffReader arff = new ArffReader(reader);
     	return arff.getData();
     }
-    
-    
-    
+
 }

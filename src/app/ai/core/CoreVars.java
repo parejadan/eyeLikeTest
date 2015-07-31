@@ -3,7 +3,7 @@ package app.ai.core;
 public class CoreVars {
 
 	//training and monitoring variables
-    public static int queueSize = 200; //how many magnitudes are required for training and monitoring
+    public static int queueSize = 250; //460; //how many magnitudes are required for training and monitoring
     public static int rows = 500;
     static int alphaCount = queueSize; //how many alphas we should simulate
     static double subsize = 2/3.0; //percent of queue size data is subsampled for computing alphas

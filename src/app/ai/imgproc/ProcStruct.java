@@ -29,6 +29,7 @@ public class ProcStruct {
     		pupil = new Point(-1, -1);
     	} else { //store detected eyes
     		pupil = p;
+    		//mskpupilToEyereg();
     	}
 		
 	}
