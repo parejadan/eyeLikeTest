@@ -169,7 +169,7 @@ public class FindEyes {
 			pupil.y += cEye[1];
 		}
 		
-		if (ProcVars.debug) Core.circle(frame_gray, pupil, ProcVars._THICK, ProcVars._COLOR);
+		//if (ProcVars.debug) Core.circle(frame_gray, pupil, ProcVars._THICK, ProcVars._COLOR);
 		faceROI.release();
 		
 		return pupil;
