@@ -68,6 +68,10 @@ class Detect {
 		
 	Detect() { }
 
+    /**
+     * Calculates a video's frame rate by counting overall frames and  deviding them
+     * by the specified video length vidLen. vidFile is string name of video to get frame count from.
+     */
 	public double getFPS(String vidFile, double vidLen) {
 		cam = new VideoCapture(vidFile);
 		System.out.println("obtaining video fps");
@@ -79,6 +83,10 @@ class Detect {
 		return frms / vidLen;
 	}
 	
+    /**
+     * Reads in the next frame from a camera object. Pupil coordinates from each frame read is extracted,
+     * then stored for calculating distance between two consecutive frames. Magnitudes are then stored in a global LimQueue object.
+     */
     boolean readNextFrame() {
 		cam.read(frame); //read in next frame
 		
@@ -113,6 +121,9 @@ class Detect {
     	return true;
     }
       
+    /**
+     * Resets global LimQueue and fills it with magnitudes of the specified length
+     */
     boolean fillUpQueue() {
     	mags = new LimQueue<Double>(CoreVars.queueSize); //reset mags
         
@@ -263,6 +274,9 @@ class Detect {
     	
     }
 
+    /**
+     * generates trainning data
+     */
     void train() throws IOException  {
     	System.out.println("TRAINNING IS BEGINNING");
     	int i;
