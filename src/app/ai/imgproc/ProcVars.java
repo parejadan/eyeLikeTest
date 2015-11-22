@@ -10,7 +10,7 @@ public class ProcVars {
     //debugging variables (draw in image where face and pupils are being detected
 	public static boolean debug = true;
     public static final Scalar _COLOR = new Scalar(255, 255, 255); //color debugging shapes color
-    public static final int _THICK = 2; //how thick the debugging shape should be
+    public static final int _THICK = 3; //how thick the debugging shape should be
     //face detection variables
 	static float mRelativeFS = 0.2f;
     static int mAbsoluteFS = 0;

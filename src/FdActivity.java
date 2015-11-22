@@ -12,7 +12,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-//import java.util.ArrayList;
 import java.util.Date;
 
 import org.opencv.core.Core;
@@ -37,15 +36,13 @@ public class FdActivity {
 	public static void main(String[] args) throws Exception {
     	System.loadLibrary(Core.NATIVE_LIBRARY_NAME);    	
         Detect obj = new Detect();
-        
-        //obj.train();
-        //obj.test();
-        obj.testOnVideo(15.33, 1500, 30, 60, "s107/vid.wmv", "mergedSans107.arff");
+       
+        while (true)
+        	obj.nextFrame();
+       // String inD = "input", t2 = "d-mul", outD = "output", vt = "mp4", dt = "arff";  
+       // obj.adjust = true;
+       // obj.captureFromVidFile(30, 4, 3.5, 0, String.format("%s/s1/%s-s1.%s", inD, t2, vt), String.format("%s/%s-s4.%s", outD, t2, dt));
 
-        //obj.captureFromVidFile(15.33, 30, 60, 44, "s102/vid.wmv", "s102/labels.txt", "s102/training-data.arff");
-        //obj.captureFromVidFile(15.33, 30, 60, 54, "s103/vid.wmv", "s103/labels.txt", "s103/training-data.arff");
-        //obj.captureFromVidFile(15.33, 30, 71, 80, "s108/vid.wmv", "s108/labels.txt", "s108/training-data.arff");        
-        //obj.captureFromVidFile(15.33, 30, 61, 47, "s104/vid.wmv", "s104/labels.txt", "s104/training-data.arff");
     }
 }
 
@@ -53,10 +50,10 @@ class Detect {
 	static String trainFile = "merged.arff";
     //APIs
     private static FindFace _faceD; //face detection object
-    private static FindEyes _eyeD = new FindEyes(); //pupil detection object
+    private static FindEyes _eyeD; //pupil detection object
     private static Stats _stool = new Stats(); //mathematics and stats object
     public static LimQueue<Double> mags;
-    private static VideoCapture cam = new VideoCapture(0);
+    private static VideoCapture cam;
     FastVector fvWekaAttributes;
     static String[] labels = {"not-distracted", "distracted"}; // or non-distracted
     Scanner input = new Scanner(System.in), fi_d, fi_nd;
@@ -64,12 +61,19 @@ class Detect {
     Point last, cur; 
     ProcStruct ps;
 	Mat frame  = new Mat();
-	int frms = 0;
+	boolean adjust;
+	int frms = 0, type;
 		
-	Detect() { }
+	Detect() {
+		_faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
+		_eyeD = new FindEyes();
+		_stool = new Stats();
+		 cam = new VideoCapture(0);
+		 mags = new LimQueue<Double>(1);
+	}
 
     /**
-     * Calculates a video's frame rate by counting overall frames and  deviding them
+     * Calculates a video's frame rate by counting overall frames and  devide them
      * by the specified video length vidLen. vidFile is string name of video to get frame count from.
      */
 	public double getFPS(String vidFile, double vidLen) {
@@ -83,6 +87,25 @@ class Detect {
 		return frms / vidLen;
 	}
 	
+	/**
+	 * Reads in frames and draws detections for demonstration purposes
+	 */
+	void nextFrame() {
+		cam.read(frame);
+		if (adjust) {
+			Core.transpose(frame, frame);
+			Core.flip(frame,  frame, 1);
+		}
+		ps = _faceD.getFace(frame);
+
+        if (ps.getRect() == null) { //face cannot be located
+			ps.setpupil( new org.opencv.core.Point(-1, 1) );
+		} else {
+			_eyeD.getPupil(ps.getImg(), ps.getRect(), true);
+		}
+    	Highgui.imwrite( "detection.png", ps.getImg() );
+	}
+	
     /**
      * Reads in the next frame from a camera object. Pupil coordinates from each frame read is extracted,
      * then stored for calculating distance between two consecutive frames. Magnitudes are then stored in a global LimQueue object.
@@ -90,6 +113,11 @@ class Detect {
     boolean readNextFrame() {
 		cam.read(frame); //read in next frame
 		
+		//adjusts video orientation if recorded veritcally instead of horizontally 
+		if (adjust) {
+			Core.transpose(frame, frame);
+			Core.flip(frame, frame, 1);
+		}
 		if ( frame.empty() ) {
 			mags.add(0.0);
 			return false; //no more video feed
@@ -102,7 +130,6 @@ class Detect {
             ps.setpupil(_eyeD.getPupil(ps.getImg(), ps.getRect(), true));
         }
     	cur = ps.getpupil();
-    	Highgui.imwrite( "detection.png", ps.getImg() );
     	
         //treat closed eye signals as no eye movement
         if (cur.x  ==  -1 && cur.y == -1) {
@@ -123,37 +150,52 @@ class Detect {
       
     /**
      * Resets global LimQueue and fills it with magnitudes of the specified length
+     * return: true when queue is full, false otherwise
      */
     boolean fillUpQueue() {
     	mags = new LimQueue<Double>(CoreVars.queueSize); //reset mags
         
         //FILL UP THE MAGNITUDE QUEUE
 		cam.read(frame); //read in an initial frame
+		//adjusts video orientation if recorded vertically instead of horizontally 
+		if (adjust) {
+			Core.transpose(frame, frame);
+			Core.flip(frame, frame, 1);
+		}
+		
     	ps = _faceD.getFace(frame);
         if (ps.getRect() == null) { //face cannot be located
+        	System.out.println("Face not found");
             ps.setpupil( new org.opencv.core.Point(-1, -1) );
         } else { //locate right pupil within face region
+        	System.out.println("Face found");
             ps.setpupil(_eyeD.getPupil(ps.getImg(), ps.getRect(), true));
         }
         last = ps.getpupil();
         
-    	//while ( mags.hasRoom() && readNextFrame() ); //false when queue is finally full or no more video feed
-        while ( mags.hasRoom() ) {
-        	readNextFrame();
-        }
+        while ( mags.hasRoom() ) readNextFrame(); //continue reading frames if not full yet
         
-    	return !mags.hasRoom(); //true when queue is full, false otherwise
+    	return !mags.hasRoom();
     }
-      
-    void testOnVideo(double vidFPS, int startT, int stampT, int vidLenMins, String vidFile, String trainData) throws Exception {
+    
+    /**
+     * Tests prediction accuracy on a given video
+     * 
+     * @param vidFPS - video's frames per second. If unknown, pass getFPS()
+     * @param startT - in seconds, time stamp in video where to start testing training data
+     * @param stampT - same value as that passed training data
+     * @param vidLenSecs - video length in seconds
+     * @param vidFile - string to of video file to test training data on, should include extension and path
+     * @param trainData - training data to test
+     */
+    void testOnVideo(double vidFPS, int startT, int stampT, int vidLenSecs, String vidFile, String trainData) throws Exception {
     	System.out.println("Start video offline testing..");
     	System.out.println("Seting up image processing..");    	
     	//SETUP IMAGE PROCESSING
     	trainFile = trainData; //data to train classifier on for making predictions
     	cam = new VideoCapture(vidFile);
-        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
     	CoreVars.queueSize = (int) (stampT*vidFPS);
-    	CoreVars.rows = (int) (vidLenMins*60*vidFPS);///stampT;
+    	CoreVars.rows = (int) (vidLenSecs*vidFPS);
     	
     	System.out.println("Setting up prediction objects..");
     	//SETUP WEKA CLASSIFIER
@@ -181,14 +223,11 @@ class Detect {
     	for (int i = 0; i < (int) (startT*vidFPS); i++) cam.read(frame); //fast forward video
         System.out.println("Reached desired time stamp");
     	System.out.println("Setting up feedback system..");
-        // Time variables
-        //long cTime, sTime, secondsWait = 30l;
         double isDistracted = 0;
         
         System.out.println("Filling up queue for monitoring");
         FeedBack feed = new FeedBack();
         Instance newFrame;
-        //sTime = new  Date().getTime();
         System.out.println("Queue filled up..");
         fillUpQueue();
         System.out.printf( "Ready to do frame by frame monitoring. Press enter to begin: ", input.nextLine() );
@@ -205,39 +244,33 @@ class Detect {
         	} else {
         		if (feed.state == 1 || feed.state == -1) feed.showGreen();
         	}
-        	/*
-        	cTime = new Date().getTime();
-            System.out.printf("time: %d\t|type: %s\n", cTime-sTime, labels[(int)isDistracted] );
-            if ( (cTime - sTime) / 1000l >= secondsWait) {
-
-            	sTime = cTime;
-            }*/
 
         } while ( readNextFrame() );
         
     }
     
     /**
+     * Collect training data from a given video
+     * 
      * @param vidFPS -  video file frames per second
      * @param stampT - time stamp relative to video that a classification occurs (in seconds)
-     * @param vidLenMins - video length in minutes
+     * @param vidLenSecs - video length in seconds
      * @param startT - time in seconds where code should "fast forward" to in video
      * @param vidFile - video file name with file extension
      * @param lblsFile - manual classification data file with extension
      * @throws IOException
      */
-    void captureFromVidFile(double vidFPS, int stampT, int vidLenMins, int startT, String vidFile, String lblsFile, String outFile) throws IOException {
+    void captureFromVidFile(double vidFPS, int stampT, double vidLenSecs, int startT, String vidFile, String outFile) throws IOException {
     	trainFile = outFile;
     	cam = new VideoCapture(vidFile);
     	System.out.printf("Fast forwarding %ds into the video\n", startT);
     	for(int i = 0; i < (int) (startT*vidFPS); i++) cam.read(frame); //fast forward to where video should begin recording
     	
-        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
     	System.out.println("DATA COLLECTION BEGINNING");
     	CoreVars.queueSize = (int) (stampT*vidFPS);
-    	CoreVars.rows = vidLenMins*60/stampT;
+    	CoreVars.rows = (int) vidLenSecs/stampT;
     	
-    	System.out.printf("Queue Size is: %d\n", CoreVars.queueSize);
+    	System.out.printf("vid name: %s\nQueue Size is: %d\n", vidFile, CoreVars.queueSize);
         
         //Weka  objects
     	Attribute[] attributes;
@@ -258,29 +291,27 @@ class Detect {
         isTrainingSet.setClassIndex(CoreVars.queueSize);
 
         Instance newReading;
-    	input = new Scanner( new File(lblsFile) );
+    	//input = new Scanner( new File(lblsFile) );
     	for (int i = 0; i < CoreVars.rows; i++ ) {
     		
     		if ( fillUpQueue() ) {
                 newReading = new Instance(CoreVars.queueSize+1);
                 for (int k = 0; k < CoreVars.queueSize; k++) newReading.setValue((Attribute) fvWekaAttributes.elementAt(k), mags.getVal(k));
                 
-                newReading.setValue((Attribute)fvWekaAttributes.elementAt(CoreVars.queueSize), labels[input.nextInt()] );
+                newReading.setValue((Attribute)fvWekaAttributes.elementAt(CoreVars.queueSize), labels[type] );
                 isTrainingSet.add(newReading); // add the instance
     		}
-			System.out.printf("Queue Size %d\n", mags.size());	
     	}
         saveArff(isTrainingSet, trainFile);
     	
     }
 
     /**
-     * generates trainning data
+     * Collect training data from web camera
      */
     void train() throws IOException  {
     	System.out.println("TRAINNING IS BEGINNING");
     	int i;
-        _faceD = new FindFace( new CascadeClassifier(getClass().getResource("/haarcascade_frontalface_alt.xml").getPath()) );
 
         //WEKA OBJECTS
     	Attribute[] attributes;
@@ -319,7 +350,11 @@ class Detect {
         }
         saveArff(isTrainingSet, trainFile);
     }
-    
+
+    /**
+     * Test training data collected from webcam against web cam feed
+     * @throws Exception
+     */
     void test() throws Exception {
 
     	System.out.println("TESTING IS BEGINNING");
@@ -341,25 +376,6 @@ class Detect {
         input.nextLine();
         
         Instance newFrame;
-        /*
-        fi_d = new Scanner(new File("distracted.csv") );
-        ArrayList<Double> tmpMags;
-        String[] tmpIn;
-        while ( fi_d.hasNext() ) {
-            tmpMags = new ArrayList<Double>();
-            tmpIn = fi_d.nextLine().split(",");
-            for (int i = 0; i < tmpIn.length-1; i++) tmpMags.add( Double.parseDouble(tmpIn[i]) );
-            
-            newFrame = new Instance(CoreVars.queueSize+1);
-        	for (int k = 0; k < CoreVars.queueSize; k++) newFrame.setValue((Attribute)fvWekaAttributes.elementAt(k), tmpMags.get(k) );
-
-            dataUnlabeled.add(newFrame);
-            dataUnlabeled.setClassIndex(dataUnlabeled.numAttributes() - 1);
-
-        	// Predict
-            isDistracted = eTest.evaluateModelOnceAndRecordPrediction(cModel, dataUnlabeled.lastInstance());
-            System.out.println(isDistracted);
-        }*/
         
         fillUpQueue();
         sTime = new  Date().getTime();
@@ -369,7 +385,6 @@ class Detect {
         	for (int k = 0; k < CoreVars.queueSize; k++) newFrame.setValue((Attribute)fvWekaAttributes.elementAt(k), mags.getVal(k));
             dataUnlabeled.add(newFrame);
             dataUnlabeled.setClassIndex(dataUnlabeled.numAttributes() - 1);
-            //System.out.println( dataUnlabeled.lastInstance().toString() );
             // Predict
             isDistracted = eTest.evaluateModelOnceAndRecordPrediction(cModel, dataUnlabeled.lastInstance());
             System.out.println(isDistracted);
@@ -389,11 +404,9 @@ class Detect {
         }
     }
 
-    /* Saves the Instances object as an .arff file.
-     * Pre-conditions:
-     *  location specifies an absolute path.
-     * Post-conditions:
-     *  saves dataSet at location.
+    /** Saves the Instances object as an .arff file.
+     * Pre-conditions: location specifies an absolute path.
+     * Post-conditions: saves dataSet at location.
      */
     void saveArff(Instances dataSet, String saveFile) throws IOException {
 		 ArffSaver saver = new ArffSaver();
@@ -402,17 +415,14 @@ class Detect {
 		 saver.writeBatch();
     }
     
-    /* Loads an Instances object from an .arff file.
-     * Pre-conditions:
-     *  location specifies an absolute path.
-     * Post-conditions:
-     *  loads Instances from location.
+    /** Loads an Instances object from an .arff file.
+     * Pre-conditions: location specifies an absolute path.
+     * Post-conditions: loads Instances from location.
      */
     Instances loadArff(String location) throws IOException {
     	BufferedReader reader = new BufferedReader(new FileReader(location));
     	ArffReader arff = new ArffReader(reader);
     	return arff.getData();
     }
-   
-    
+     
 }

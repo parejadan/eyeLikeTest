@@ -43,7 +43,7 @@ public class FindFace {
             	if (tmp.height+tmp.width > mxFace.height+mxFace.width) //addition is considered faster arithmetic than multiplication
             		mxFace = tmp;
             
-            //if (ProcVars.debug) Core.rectangle(mGray, mxFace.br(), mxFace.tl(), ProcVars._COLOR, ProcVars._THICK);
+            if (ProcVars.debug) Core.rectangle(mGray, mxFace.br(), mxFace.tl(), ProcVars._COLOR, ProcVars._THICK);
         }
 
         mv.get(0).release(); mv.get(1).release(); //address any possible memory leakage

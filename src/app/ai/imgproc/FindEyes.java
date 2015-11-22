@@ -85,7 +85,7 @@ public class FindEyes {
 		Mat eyeROI = scaleToFastSize( face.submat(eye) );
 		rows = eyeROI.rows()-1; cols = eyeROI.cols()-1;
 		
-		//if (ProcVars.debug) Core.rectangle(face, eye.tl(), eye.br(), ProcVars._COLOR); //draw eye region - for debugging
+		if (ProcVars.debug) Core.rectangle(face, eye.tl(), eye.br(), ProcVars._COLOR); //draw eye region - for debugging
     	
 		//find the gradient
 		Mat gradX = computeGradient(eyeROI, rows, cols);
@@ -144,7 +144,7 @@ public class FindEyes {
 		Mat faceROI = frame_gray.submat(face);
 		Point pupil = new Point(-1, -1);
 
-		//if (ProcVars.debug) Core.rectangle(frame_gray, face.tl(), face.br(), ProcVars._COLOR); //draw eye region - for debugging
+		if (ProcVars.debug) Core.rectangle(frame_gray, face.tl(), face.br(), ProcVars._COLOR); //draw eye region - for debugging
 
 		//determine a face to eye ratio and positioning based on percentages
 		eyeRegW = (int) (face.width * (ProcVars.kEyePercentWidth/100.0));
@@ -169,7 +169,7 @@ public class FindEyes {
 			pupil.y += cEye[1];
 		}
 		
-		//if (ProcVars.debug) Core.circle(frame_gray, pupil, ProcVars._THICK, ProcVars._COLOR);
+		if (ProcVars.debug) Core.circle(frame_gray, pupil, ProcVars._THICK, ProcVars._COLOR);
 		faceROI.release();
 		
 		return pupil;
